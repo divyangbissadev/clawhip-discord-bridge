@@ -33,7 +33,6 @@ import {
   appendRelayMessages,
   listRelayMessages,
   readRelayState,
-  writeRelayState,
 } from './relay/state-store.mjs';
 import {
   buildDispatchRecord as buildStateDispatchRecord,
@@ -782,6 +781,23 @@ test('relay state store appends and filters messages by cursor', () => {
   const filtered = listRelayMessages(state, { after: all[0].id, limit: 10 });
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0].content, 'two');
+});
+
+test('repo-local init bootstrap creates .bridge sidecar files', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-init-'));
+  fs.mkdirSync(path.join(dir, '.git'));
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'myproject' }));
+
+  const { spawnSync } = await import('node:child_process');
+  const result = spawnSync('node', [path.resolve('scripts/init.mjs')], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0);
+  assert.equal(fs.existsSync(path.join(dir, '.bridge', 'config.toml')), true);
+  assert.equal(fs.existsSync(path.join(dir, '.bridge', 'run.sh')), true);
+  assert.equal(fs.existsSync(path.join(dir, '.bridge', 'doctor.sh')), true);
 });
 
 test('tmux helpers can inspect the bridge session when tmux is accessible', (t) => {

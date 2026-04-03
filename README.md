@@ -54,6 +54,13 @@ See the full guide:
 - [`INSTALLATION.md`](./INSTALLATION.md)
 - [`QUICKSTART.md`](./QUICKSTART.md)
 
+Repo-local bootstrap is available too:
+
+```bash
+cd /path/to/your-repo
+node /path/to/clawhip-discord-bridge/scripts/init.mjs
+```
+
 1. Install prerequisites:
    - Node 20+
    - `tmux`

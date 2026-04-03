@@ -57,7 +57,71 @@ cd ~/Workspace
 git clone <YOUR_MYPROJECT_REPO_URL> myproject
 ```
 
-## 5. Configure Clawhip
+## 5. Simplest repo-local setup
+
+Inside your target repo:
+
+```bash
+cd ~/Workspace/myproject
+node /Users/garima/Workspace/clawhip-discord-bridge/scripts/init.mjs
+```
+
+This creates:
+
+```bash
+myproject/.bridge/
+  config.toml
+  .env.example
+  run.sh
+  status.sh
+  stop.sh
+  doctor.sh
+```
+
+Then run:
+
+```bash
+cd ~/Workspace/myproject
+.bridge/doctor.sh
+```
+
+## 6. Configure credentials
+
+Edit:
+
+```bash
+~/Workspace/myproject/.bridge/config.toml
+```
+
+Fill in the placeholders:
+
+- bot token / channel id
+- allowed user id
+- transport selection
+
+## 7. Start Clawhip daemon
+
+```bash
+clawhip start
+```
+
+Verify:
+
+```bash
+clawhip status
+```
+
+## 8. Start the bridge from your repo
+
+```bash
+cd ~/Workspace/myproject
+.bridge/run.sh
+.bridge/status.sh
+```
+
+## 9. Alternative manual config path
+
+If you want manual global config instead of repo-local sidecar, use:
 
 Edit:
 
@@ -101,27 +165,7 @@ allowed_user_ids = ["YOUR_DISCORD_USER_ID"]
 allowed_command_prefixes = ["echo", "pwd", "ls", "git status", "npm test", "npm run check"]
 ```
 
-## 6. Start Clawhip daemon
-
-```bash
-clawhip start
-```
-
-Verify:
-
-```bash
-clawhip status
-```
-
-## 7. Start the bridge
-
-```bash
-cd ~/Workspace/clawhip-discord-bridge
-bash scripts/clawhip-discord-bridge-run.sh
-bash scripts/clawhip-discord-bridge-status.sh
-```
-
-## 8. Send messages from Discord
+## 10. Send messages from Discord
 
 Try these:
 
@@ -157,7 +201,7 @@ approve
 reject
 ```
 
-## 9. What you should see back
+## 11. What you should see back
 
 The bridge can send:
 
@@ -177,7 +221,7 @@ Task context includes:
 - skills
 - token usage when available
 
-## 10. Best default for unattended work
+## 12. Best default for unattended work
 
 Use:
 
@@ -191,7 +235,7 @@ Reason:
 
 Use `@claude ...` only when you explicitly want Claude.
 
-## 11. Useful commands
+## 13. Useful commands
 
 Check bridge status:
 
@@ -212,7 +256,7 @@ bash scripts/clawhip-discord-bridge-stop.sh
 bash scripts/clawhip-discord-bridge-run.sh
 ```
 
-## 12. If you want Slack / Teams / WhatsApp later
+## 14. If you want Slack / Teams / WhatsApp later
 
 Use the built-in relay path described in:
 
@@ -224,7 +268,7 @@ Start relay:
 npm run relay:start
 ```
 
-## 13. If something does not work
+## 15. If something does not work
 
 Check in order:
 
@@ -243,7 +287,7 @@ Expected tmux sessions usually include:
 - `myproject-dispatch-claude`
 - `clawhip-discord-bridge`
 
-## 14. Next docs
+## 16. Next docs
 
 - `README.md` = overview
 - `INSTALLATION.md` = detailed setup

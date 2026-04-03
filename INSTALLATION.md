@@ -44,6 +44,32 @@ npm test
 npm run check
 ```
 
+## 3b. Repo-local bootstrap option
+
+If you want the bridge to feel local to your codebase, run:
+
+```bash
+cd /path/to/your-target-repo
+node /path/to/clawhip-discord-bridge/scripts/init.mjs
+```
+
+This creates a `.bridge/` folder in the target repo with:
+
+- `config.toml`
+- `.env.example`
+- `run.sh`
+- `status.sh`
+- `stop.sh`
+- `doctor.sh`
+
+Then:
+
+```bash
+cd /path/to/your-target-repo
+.bridge/doctor.sh
+.bridge/run.sh
+```
+
 ## 4. Choose a messaging transport
 
 Supported transport modes:

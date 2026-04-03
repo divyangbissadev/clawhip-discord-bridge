@@ -14,10 +14,14 @@
   },
   "homepage": "https://github.com/divyangbissadev/clawhip-discord-bridge#readme",
   "scripts": {
+    "init": "node scripts/init.mjs",
     "start": "node scripts/clawhip-discord-bridge.mjs",
+    "up": "node scripts/up.mjs",
+    "down": "node scripts/down.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "relay:start": "node scripts/relay/server.mjs",
     "test": "node --test scripts/clawhip-discord-bridge.test.mjs",
-    "check": "node --check scripts/clawhip-discord-bridge.mjs && node --check scripts/clawhip-discord-bridge-lib.mjs && node --check scripts/bridge/config.mjs && node --check scripts/bridge/command-router.mjs && node --check scripts/bridge/discord-adapter.mjs && node --check scripts/bridge/reply-monitor.mjs && node --check scripts/bridge/runtime.mjs && node --check scripts/bridge/dispatch-state.mjs && node --check scripts/bridge/clawhip-notify.mjs && node --check scripts/messaging/base-adapter.mjs && node --check scripts/messaging/discord.mjs && node --check scripts/messaging/telegram.mjs && node --check scripts/messaging/relay.mjs && node --check scripts/messaging/webhook.mjs && node --check scripts/messaging/provider-factory.mjs && node --check scripts/relay/state-store.mjs && node --check scripts/relay/normalizers.mjs && node --check scripts/relay/outbound-targets.mjs && node --check scripts/relay/server.mjs"
+    "check": "node --check scripts/init.mjs && node --check scripts/up.mjs && node --check scripts/down.mjs && node --check scripts/doctor.mjs && node --check scripts/clawhip-discord-bridge.mjs && node --check scripts/clawhip-discord-bridge-lib.mjs && node --check scripts/bridge/config.mjs && node --check scripts/bridge/command-router.mjs && node --check scripts/bridge/discord-adapter.mjs && node --check scripts/bridge/reply-monitor.mjs && node --check scripts/bridge/runtime.mjs && node --check scripts/bridge/dispatch-state.mjs && node --check scripts/bridge/clawhip-notify.mjs && node --check scripts/messaging/base-adapter.mjs && node --check scripts/messaging/discord.mjs && node --check scripts/messaging/telegram.mjs && node --check scripts/messaging/relay.mjs && node --check scripts/messaging/webhook.mjs && node --check scripts/messaging/provider-factory.mjs && node --check scripts/relay/state-store.mjs && node --check scripts/relay/normalizers.mjs && node --check scripts/relay/outbound-targets.mjs && node --check scripts/relay/server.mjs"
   },
   "engines": {
     "node": ">=20"

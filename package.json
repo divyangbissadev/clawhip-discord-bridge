@@ -1,0 +1,15 @@
+{
+  "name": "clawhip-discord-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone Discord ↔ tmux bridge for Clawhip-backed unattended development",
+  "scripts": {
+    "start": "node scripts/clawhip-discord-bridge.mjs",
+    "test": "node --test scripts/clawhip-discord-bridge.test.mjs",
+    "check": "node --check scripts/clawhip-discord-bridge.mjs && node --check scripts/clawhip-discord-bridge-lib.mjs && node --check scripts/bridge/config.mjs && node --check scripts/bridge/command-router.mjs && node --check scripts/bridge/reply-monitor.mjs && node --check scripts/bridge/runtime.mjs && node --check scripts/bridge/dispatch-state.mjs && node --check scripts/bridge/clawhip-notify.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -2,6 +2,51 @@
 
 This is the shortest path to get the bridge running against a repo like `myproject`.
 
+## Single-line install + configure
+
+```bash
+TARGET_REPO="$HOME/Workspace/myproject" DISCORD_BOT_TOKEN="YOUR_DISCORD_BOT_TOKEN" DISCORD_CHANNEL_ID="YOUR_DISCORD_CHANNEL_ID" DISCORD_USER_ID="YOUR_DISCORD_USER_ID" bash -lc 'set -euo pipefail; BRIDGE_DIR="$HOME/Workspace/clawhip-discord-bridge"; [ -d "$BRIDGE_DIR/.git" ] || git clone https://github.com/divyangbissadev/clawhip-discord-bridge.git "$BRIDGE_DIR"; mkdir -p "$HOME/.clawhip"; cat > "$HOME/.clawhip/config.toml" <<EOF
+[providers.discord]
+token = "${DISCORD_BOT_TOKEN}"
+default_channel = "${DISCORD_CHANNEL_ID}"
+
+[[monitors.git.repos]]
+path = "${TARGET_REPO}"
+name = "$(basename "${TARGET_REPO}")"
+remote = "origin"
+emit_commits = true
+emit_branch_changes = true
+channel = "${DISCORD_CHANNEL_ID}"
+format = "compact"
+
+[[monitors.tmux.sessions]]
+session = "$(basename "${TARGET_REPO}")"
+keywords = ["FAILED", "panic"]
+keyword_window_secs = 30
+stale_minutes = 30
+channel = "${DISCORD_CHANNEL_ID}"
+format = "alert"
+
+[bridge_transport]
+provider = "discord"
+
+[discord_bridge]
+dispatch_session = "$(basename "${TARGET_REPO}")-dispatch"
+shell_session = "$(basename "${TARGET_REPO}")-shell"
+default_executor = "codex"
+executor_commands = ["codex", "omx", "claude"]
+allowed_user_ids = ["${DISCORD_USER_ID}"]
+allowed_command_prefixes = ["echo", "pwd", "ls", "git status", "npm test", "npm run check"]
+EOF
+cd "$BRIDGE_DIR" && npm test && npm run check && (clawhip status >/dev/null 2>&1 || tmux has-session -t clawhip-daemon 2>/dev/null || tmux new-session -d -s clawhip-daemon "clawhip start >> /tmp/clawhip-daemon.log 2>&1") && bash scripts/clawhip-discord-bridge-run.sh && bash scripts/clawhip-discord-bridge-status.sh'
+```
+
+After that, send a Discord message like:
+
+```text
+fix login validation and run tests
+```
+
 ## 1. Prerequisites
 
 Install these first:

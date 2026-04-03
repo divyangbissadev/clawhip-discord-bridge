@@ -51,6 +51,7 @@ If you want the bridge to feel local to your codebase, run:
 ```bash
 cd /path/to/your-target-repo
 npx clawhip-discord-bridge init
+npx clawhip-discord-bridge setup discord
 ```
 
 This creates a `.bridge/` folder in the target repo with:
@@ -66,8 +67,8 @@ Then:
 
 ```bash
 cd /path/to/your-target-repo
-.bridge/doctor.sh
-.bridge/run.sh
+npx clawhip-discord-bridge doctor
+npx clawhip-discord-bridge up
 ```
 
 ## 4. Choose a messaging transport

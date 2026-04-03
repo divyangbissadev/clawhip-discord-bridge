@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const SCRIPT_BY_COMMAND = {
   init: "init.mjs",
+  setup: "setup.mjs",
   up: "up.mjs",
   down: "down.mjs",
   doctor: "doctor.mjs",
@@ -18,6 +19,7 @@ function printHelp() {
 
 Usage:
   clawhip-discord-bridge init
+  clawhip-discord-bridge setup discord
   clawhip-discord-bridge up
   clawhip-discord-bridge down
   clawhip-discord-bridge doctor
@@ -26,6 +28,7 @@ Usage:
 
 Examples:
   npx clawhip-discord-bridge init
+  npx clawhip-discord-bridge setup discord
   npx clawhip-discord-bridge up
   npx clawhip-discord-bridge doctor
   npx clawhip-discord-bridge start --process-command "git status"

@@ -4,7 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 
-function findRepoRoot(startDir) {
+export function findRepoRoot(startDir) {
   let current = path.resolve(startDir);
   while (true) {
     if (fs.existsSync(path.join(current, '.git'))) {
@@ -58,8 +58,7 @@ function detectExecutor() {
   return 'codex';
 }
 
-function main() {
-  const cwd = process.cwd();
+export function initializeBridgeSidecar(cwd = process.cwd()) {
   const repoRoot = findRepoRoot(cwd);
   const repoName = readPackageName(repoRoot) ?? path.basename(repoRoot);
   const slug = slugify(repoName);
@@ -88,17 +87,35 @@ function main() {
     fs.chmodSync(file, 0o755);
   }
 
-  console.log(`Initialized bridge sidecar for repo: ${repoRoot}`);
-  console.log(`Created: ${configPath}`);
-  console.log(`Created: ${envExamplePath}`);
-  console.log(`Created: ${runPath}`);
-  console.log(`Created: ${statusPath}`);
-  console.log(`Created: ${stopPath}`);
-  console.log(`Created: ${doctorPath}`);
+  return {
+    repoRoot,
+    repoName,
+    slug,
+    bridgeDir,
+    configPath,
+    envExamplePath,
+    runPath,
+    statusPath,
+    stopPath,
+    doctorPath,
+    defaultExecutor,
+    bridgeRoot,
+  };
+}
+
+function main() {
+  const result = initializeBridgeSidecar(process.cwd());
+  console.log(`Initialized bridge sidecar for repo: ${result.repoRoot}`);
+  console.log(`Created: ${result.configPath}`);
+  console.log(`Created: ${result.envExamplePath}`);
+  console.log(`Created: ${result.runPath}`);
+  console.log(`Created: ${result.statusPath}`);
+  console.log(`Created: ${result.stopPath}`);
+  console.log(`Created: ${result.doctorPath}`);
   console.log('Next steps:');
-  console.log(`1. Fill in messaging credentials in ${configPath}`);
-  console.log(`2. Run ${path.join(bridgeDir, 'doctor.sh')}`);
-  console.log(`3. Run ${path.join(bridgeDir, 'run.sh')}`);
+  console.log(`1. Fill in messaging credentials in ${result.configPath}`);
+  console.log(`2. Run ${path.join(result.bridgeDir, 'doctor.sh')}`);
+  console.log(`3. Run ${path.join(result.bridgeDir, 'run.sh')}`);
 }
 
 main();

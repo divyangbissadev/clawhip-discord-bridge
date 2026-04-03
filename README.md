@@ -59,6 +59,9 @@ Repo-local bootstrap is available too:
 ```bash
 cd /path/to/your-repo
 npx clawhip-discord-bridge init
+npx clawhip-discord-bridge setup discord
+npx clawhip-discord-bridge doctor
+npx clawhip-discord-bridge up
 ```
 
 1. Install prerequisites:

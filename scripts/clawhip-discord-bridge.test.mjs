@@ -807,6 +807,50 @@ test('package cli exposes help and init commands', () => {
   assert.equal(help.status, 0);
   assert.match(help.stdout, /clawhip-discord-bridge/);
   assert.match(help.stdout, /init/);
+  assert.match(help.stdout, /setup discord/);
+});
+
+test('setup discord copies values from existing clawhip config into local sidecar', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-setup-'));
+  const homeDir = path.join(dir, 'home');
+  const repoDir = path.join(dir, 'repo');
+  fs.mkdirSync(path.join(homeDir, '.clawhip'), { recursive: true });
+  fs.mkdirSync(path.join(repoDir, '.git'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ name: 'myproject' }));
+  fs.writeFileSync(
+    path.join(homeDir, '.clawhip', 'config.toml'),
+    `
+[providers.discord]
+token = "real-token"
+default_channel = "123456"
+
+[discord_bridge]
+default_executor = "omx"
+executor_commands = ["codex", "omx", "claude"]
+allowed_user_ids = ["999"]
+allowed_command_prefixes = ["git status", "pwd"]
+`
+  );
+
+  const initResult = spawnSync('node', [path.resolve('scripts/init.mjs')], {
+    cwd: repoDir,
+    env: { ...process.env, HOME: homeDir },
+    encoding: 'utf8',
+  });
+  assert.equal(initResult.status, 0);
+
+  const setupResult = spawnSync('node', [path.resolve('scripts/setup.mjs'), 'discord'], {
+    cwd: repoDir,
+    env: { ...process.env, HOME: homeDir },
+    encoding: 'utf8',
+  });
+  assert.equal(setupResult.status, 0);
+
+  const configured = fs.readFileSync(path.join(repoDir, '.bridge', 'config.toml'), 'utf8');
+  assert.match(configured, /token = "real-token"/);
+  assert.match(configured, /default_channel = "123456"/);
+  assert.match(configured, /allowed_user_ids = \["999"\]/);
+  assert.match(configured, /default_executor = "omx"/);
 });
 
 test('tmux helpers can inspect the bridge session when tmux is accessible', (t) => {

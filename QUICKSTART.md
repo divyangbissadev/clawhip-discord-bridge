@@ -63,7 +63,7 @@ Inside your target repo:
 
 ```bash
 cd ~/Workspace/myproject
-node /Users/garima/Workspace/clawhip-discord-bridge/scripts/init.mjs
+npx clawhip-discord-bridge init
 ```
 
 This creates:

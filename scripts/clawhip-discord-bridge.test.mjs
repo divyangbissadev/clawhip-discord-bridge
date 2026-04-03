@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   buildExecutorCommand,
   buildExecutorCommandFromParts,
@@ -783,12 +784,11 @@ test('relay state store appends and filters messages by cursor', () => {
   assert.equal(filtered[0].content, 'two');
 });
 
-test('repo-local init bootstrap creates .bridge sidecar files', async () => {
+test('repo-local init bootstrap creates .bridge sidecar files', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-init-'));
   fs.mkdirSync(path.join(dir, '.git'));
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'myproject' }));
 
-  const { spawnSync } = await import('node:child_process');
   const result = spawnSync('node', [path.resolve('scripts/init.mjs')], {
     cwd: dir,
     encoding: 'utf8',
@@ -798,6 +798,15 @@ test('repo-local init bootstrap creates .bridge sidecar files', async () => {
   assert.equal(fs.existsSync(path.join(dir, '.bridge', 'config.toml')), true);
   assert.equal(fs.existsSync(path.join(dir, '.bridge', 'run.sh')), true);
   assert.equal(fs.existsSync(path.join(dir, '.bridge', 'doctor.sh')), true);
+});
+
+test('package cli exposes help and init commands', () => {
+  const help = spawnSync('node', [path.resolve('scripts/cli.mjs'), '--help'], {
+    encoding: 'utf8',
+  });
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /clawhip-discord-bridge/);
+  assert.match(help.stdout, /init/);
 });
 
 test('tmux helpers can inspect the bridge session when tmux is accessible', (t) => {

@@ -50,7 +50,7 @@ If you want the bridge to feel local to your codebase, run:
 
 ```bash
 cd /path/to/your-target-repo
-node /path/to/clawhip-discord-bridge/scripts/init.mjs
+npx clawhip-discord-bridge init
 ```
 
 This creates a `.bridge/` folder in the target repo with:

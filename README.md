@@ -58,7 +58,7 @@ Repo-local bootstrap is available too:
 
 ```bash
 cd /path/to/your-repo
-node /path/to/clawhip-discord-bridge/scripts/init.mjs
+npx clawhip-discord-bridge init
 ```
 
 1. Install prerequisites:

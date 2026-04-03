@@ -148,6 +148,94 @@ This is the recommended integration path for:
 - internal chat tools
 - any webhook-capable messaging platform
 
+## 5b. Run the one-port relay server
+
+If you want Slack / Teams / WhatsApp / custom chat support on a single port,
+run the built-in relay:
+
+```bash
+BRIDGE_RELAY_PORT=3031 \
+BRIDGE_RELAY_AUTH_TOKEN="YOUR_SHARED_SECRET" \
+BRIDGE_RELAY_OUTBOUND_MODE=stdout \
+npm run relay:start
+```
+
+Main endpoints:
+
+- `GET /healthz`
+- `GET /me`
+- `GET /inbound?after=<cursor>&limit=<n>`
+- `POST /outbound`
+- `POST /ingest/slack`
+- `POST /ingest/teams`
+- `POST /ingest/telegram`
+- `POST /ingest/whatsapp`
+- `POST /ingest/generic`
+
+Auth:
+
+- set `BRIDGE_RELAY_AUTH_TOKEN`
+- send `Authorization: Bearer YOUR_SHARED_SECRET`
+
+### Relay outbound modes
+
+- `stdout` — prints bridge messages to stdout
+- `webhook` — generic outbound webhook
+- `slack-webhook` — Slack incoming webhook payload
+- `teams-webhook` — Teams webhook payload
+- `telegram` — direct Telegram delivery
+
+Example:
+
+```bash
+BRIDGE_RELAY_OUTBOUND_MODE=slack-webhook \
+BRIDGE_RELAY_WEBHOOK_URL="https://hooks.slack.com/services/..." \
+npm run relay:start
+```
+
+Then point the bridge to the relay:
+
+```toml
+[bridge_transport]
+provider = "relay"
+
+[bridge_provider.relay]
+inbound_url = "http://127.0.0.1:3031/inbound"
+outbound_url = "http://127.0.0.1:3031/outbound"
+identity_url = "http://127.0.0.1:3031/me"
+auth_header_name = "Authorization"
+auth_header_value = "Bearer YOUR_SHARED_SECRET"
+```
+
+### Ingest examples
+
+Slack-style event:
+
+```bash
+curl -X POST http://127.0.0.1:3031/ingest/slack \
+  -H "Authorization: Bearer YOUR_SHARED_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"event":{"text":"fix login validation","user":"U123","username":"divyang","channel":"C123"}}'
+```
+
+Teams-style webhook:
+
+```bash
+curl -X POST http://127.0.0.1:3031/ingest/teams \
+  -H "Authorization: Bearer YOUR_SHARED_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"review auth migration","from":{"id":"user-1","name":"Divyang"}}'
+```
+
+Twilio WhatsApp-style webhook:
+
+```bash
+curl -X POST http://127.0.0.1:3031/ingest/whatsapp \
+  -H "Authorization: Bearer YOUR_SHARED_SECRET" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data 'Body=fix+login+validation&From=whatsapp%3A%2B10000000000&To=whatsapp%3A%2B19999999999'
+```
+
 ## 6. Start the bridge
 
 ```bash

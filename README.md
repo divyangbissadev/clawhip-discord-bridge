@@ -14,6 +14,7 @@ to be **messaging-platform extensible** and **agent centric**:
 - native: Discord, Telegram
 - extensible: generic relay for Slack, Teams, WhatsApp, and custom messengers
 - outbound-only starter hooks: Slack webhooks, Teams webhooks, generic webhooks
+- built-in relay server for one-port deployment and provider normalization
 
 ## Features
 
@@ -70,6 +71,11 @@ bash scripts/clawhip-discord-bridge-run.sh
 ```text
 fix login validation and run tests
 ```
+
+For one-port multi-messaging deployments, also see:
+
+- [`INSTALLATION.md`](./INSTALLATION.md)
+- `npm run relay:start`
 
 ## Requirements
 

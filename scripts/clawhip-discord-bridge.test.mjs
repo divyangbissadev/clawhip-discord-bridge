@@ -24,6 +24,18 @@ import { createMessagingAdapter } from './messaging/provider-factory.mjs';
 import { TelegramChatAdapter } from './messaging/telegram.mjs';
 import { RelayMessagingAdapter } from './messaging/relay.mjs';
 import {
+  normalizeSlackEvent,
+  normalizeTeamsWebhook,
+  normalizeTelegramUpdate,
+  normalizeTwilioWhatsAppForm,
+} from './relay/normalizers.mjs';
+import {
+  appendRelayMessages,
+  listRelayMessages,
+  readRelayState,
+  writeRelayState,
+} from './relay/state-store.mjs';
+import {
   buildDispatchRecord as buildStateDispatchRecord,
   extractTokenUsage,
   formatDispatchLifecycleMessage,
@@ -729,6 +741,47 @@ test('relay adapter uses generic inbound/outbound contract', async () => {
   assert.equal(identity.id, 'relay-bot');
   await adapter.postMessage('relay out');
   assert.equal(calls[0].init.headers['X-Bridge-Key'], 'secret');
+});
+
+test('relay normalizers cover slack, teams, telegram, and whatsapp payloads', () => {
+  assert.equal(
+    normalizeSlackEvent({ event: { text: 'slack hi', user: 'u1', username: 'slacker', channel: 'c1' } })[0].content,
+    'slack hi'
+  );
+  assert.equal(
+    normalizeTeamsWebhook({ text: 'teams hi', from: { id: 'u2', name: 'Teams User' } })[0].author.global_name,
+    'Teams User'
+  );
+  assert.equal(
+    normalizeTelegramUpdate({ message: { text: 'telegram hi', chat: { id: 99 }, from: { id: 4, first_name: 'Tele', last_name: 'Gram' } } })[0].channel,
+    '99'
+  );
+  assert.equal(
+    normalizeTwilioWhatsAppForm({ Body: 'whatsapp hi', From: 'whatsapp:+1', To: 'whatsapp:+2' })[0].provider,
+    'whatsapp'
+  );
+});
+
+test('relay state store appends and filters messages by cursor', () => {
+  const state = readRelayState('/tmp/non-existent-relay-state.json');
+  appendRelayMessages(state, [
+    {
+      content: 'one',
+      author: { id: 'u1' },
+      provider: 'generic',
+    },
+    {
+      content: 'two',
+      author: { id: 'u2' },
+      provider: 'generic',
+    },
+  ]);
+
+  const all = listRelayMessages(state, { limit: 10 });
+  assert.equal(all.length, 2);
+  const filtered = listRelayMessages(state, { after: all[0].id, limit: 10 });
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].content, 'two');
 });
 
 test('tmux helpers can inspect the bridge session when tmux is accessible', (t) => {

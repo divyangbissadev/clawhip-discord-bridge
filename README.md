@@ -52,6 +52,7 @@ to be **messaging-platform extensible** and **agent centric**:
 See the full guide:
 
 - [`INSTALLATION.md`](./INSTALLATION.md)
+- [`QUICKSTART.md`](./QUICKSTART.md)
 
 1. Install prerequisites:
    - Node 20+

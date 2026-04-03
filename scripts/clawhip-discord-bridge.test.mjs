@@ -20,6 +20,9 @@ import {
 } from './clawhip-discord-bridge-lib.mjs';
 import { extractMessageText } from './bridge/discord-adapter.mjs';
 import { getBridgeRuntimeOptions } from './bridge/config.mjs';
+import { createMessagingAdapter } from './messaging/provider-factory.mjs';
+import { TelegramChatAdapter } from './messaging/telegram.mjs';
+import { RelayMessagingAdapter } from './messaging/relay.mjs';
 import {
   buildDispatchRecord as buildStateDispatchRecord,
   extractTokenUsage,
@@ -129,6 +132,31 @@ executor_commands = ["claude", "omx", "codex"]
   assert.equal(config.shellTmuxSession, 'claude-pilot-dispatch-shell');
   assert.equal(config.defaultExecutor, 'omx');
   assert.deepEqual(config.executorCommands, ['claude', 'omx', 'codex']);
+});
+
+test('loadBridgeConfig supports alternate provider configuration', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawhip-bridge-'));
+  const configPath = path.join(dir, 'config.toml');
+  fs.writeFileSync(
+    configPath,
+    `
+[providers.discord]
+token = "discord-token"
+default_channel = "123"
+
+[bridge_transport]
+provider = "telegram"
+
+[bridge_provider.telegram]
+bot_token = "telegram-token"
+chat_id = "999"
+`
+  );
+
+  const config = loadBridgeConfig(configPath);
+  assert.equal(config.provider, 'telegram');
+  assert.equal(config.providers.telegram.botToken, 'telegram-token');
+  assert.equal(config.providers.telegram.chatId, '999');
 });
 
 test('getBridgeRuntimeOptions enables clawhip daemon notifications by default', () => {
@@ -305,6 +333,43 @@ test('extractMessageText falls back to embed and attachment content', () => {
     }),
     'Deploy status\nreview-ready\nlog.txt'
   );
+});
+
+test('provider factory creates a Discord adapter by default', () => {
+  const adapter = createMessagingAdapter({
+    provider: 'discord',
+    providers: { discord: { token: 'discord-token', channelId: '123' } },
+  });
+
+  assert.equal(adapter.provider, 'discord');
+  assert.equal(adapter.supportsPolling, true);
+  assert.equal(adapter.supportsReactions, true);
+});
+
+test('provider factory creates relay and webhook-family adapters', () => {
+  const relay = createMessagingAdapter({
+    provider: 'relay',
+    providers: {
+      relay: {
+        inboundUrl: 'https://example.com/inbound',
+        outboundUrl: 'https://example.com/outbound',
+        identityUrl: 'https://example.com/me',
+      },
+    },
+  });
+  assert.equal(relay.provider, 'relay');
+  assert.equal(relay.supportsPolling, true);
+
+  const teams = createMessagingAdapter({
+    provider: 'teams-webhook',
+    providers: {
+      teamsWebhook: {
+        webhookUrl: 'https://example.com/teams',
+      },
+    },
+  });
+  assert.equal(teams.provider, 'teams-webhook');
+  assert.equal(teams.supportsPolling, false);
 });
 
 test('parseBridgeMetaCommand supports ralph control commands', () => {
@@ -566,6 +631,104 @@ test('reply-monitor detects plain shell prompts', () => {
 test('reply-monitor sanitizes executor boilerplate for Discord', () => {
   const reply = `Garimas-MacBook-Pro% codex exec --dangerously-bypass-approvals-and-sandbox 'say hi'\nquote> Bridge autonomy contract:\nOpenAI Codex v0.118.0 (research preview)\n--------\nworkdir: /tmp/demo\nmodel: gpt-5.4\nprovider: openai\napproval: never\nsandbox: danger-full-access\nreasoning effort: high\nreasoning summaries: none\nsession id: abc\n--------\nuser\nsay hi\ncodex\nBridge is ready\n\ntokens used\n24,479\nGarimas-MacBook-Pro%\nBRIDGE_STATUS: complete`;
   assert.equal(sanitizeTmuxReply(reply), 'say hi\nBridge is ready\n\ntokens used: 24,479');
+});
+
+test('telegram adapter normalizes updates and posts messages', async () => {
+  const calls = [];
+  const adapter = new TelegramChatAdapter({
+    botToken: 'telegram-token',
+    chatId: '999',
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes('getUpdates')) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              ok: true,
+              result: [
+                {
+                  update_id: 42,
+                  message: {
+                    text: 'hello from telegram',
+                    chat: { id: 999 },
+                    from: { id: 7, username: 'agentic', first_name: 'A', last_name: 'Bot', is_bot: false },
+                  },
+                },
+              ],
+            };
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, result: { ok: true } };
+        },
+      };
+    },
+  });
+
+  const messages = await adapter.fetchRecentMessages({ afterCursor: '41' });
+  assert.equal(messages[0].id, '42');
+  assert.equal(adapter.extractMessageText(messages[0]), 'hello from telegram');
+  assert.equal(adapter.getAuthorName(messages[0]), 'A Bot');
+
+  await adapter.postMessage('reply back');
+  assert.match(calls[1].url, /sendMessage/);
+});
+
+test('relay adapter uses generic inbound/outbound contract', async () => {
+  const calls = [];
+  const adapter = new RelayMessagingAdapter({
+    inboundUrl: 'https://relay.example.com/inbound',
+    outboundUrl: 'https://relay.example.com/outbound',
+    identityUrl: 'https://relay.example.com/me',
+    authHeaderName: 'X-Bridge-Key',
+    authHeaderValue: 'secret',
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), init });
+      if (String(url).includes('/inbound')) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              messages: [
+                {
+                  id: 'm-2',
+                  content: 'from relay',
+                  author: { id: 'u-1', username: 'relay-user' },
+                },
+              ],
+            };
+          },
+        };
+      }
+      if (String(url).includes('/me')) {
+        return {
+          ok: true,
+          async json() {
+            return { id: 'relay-bot' };
+          },
+        };
+      }
+      return {
+        ok: true,
+        async json() {
+          return { ok: true };
+        },
+      };
+    },
+  });
+
+  const messages = await adapter.fetchRecentMessages({ afterCursor: 'm-1' });
+  assert.equal(messages[0].content, 'from relay');
+  assert.equal(messages[0].author.username, 'relay-user');
+  const identity = await adapter.fetchBotIdentity();
+  assert.equal(identity.id, 'relay-bot');
+  await adapter.postMessage('relay out');
+  assert.equal(calls[0].init.headers['X-Bridge-Key'], 'secret');
 });
 
 test('tmux helpers can inspect the bridge session when tmux is accessible', (t) => {

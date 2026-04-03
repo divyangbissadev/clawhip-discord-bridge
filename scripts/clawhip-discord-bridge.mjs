@@ -8,7 +8,7 @@ import {
   writeState,
 } from './clawhip-discord-bridge-lib.mjs';
 import { getBridgeRuntimeOptions } from './bridge/config.mjs';
-import { DiscordChannelAdapter } from './bridge/discord-adapter.mjs';
+import { createMessagingAdapter } from './messaging/provider-factory.mjs';
 import { executeBridgeCommand, runBridge } from './bridge/runtime.mjs';
 
 function getArgValue(name) {
@@ -35,14 +35,11 @@ async function main() {
     return;
   }
 
-  const discord = new DiscordChannelAdapter({
-    token: bridgeConfig.token,
-    channelId: bridgeConfig.channelId,
-  });
+  const adapter = createMessagingAdapter(bridgeConfig);
 
   await runBridge({
     bridgeConfig,
-    discord,
+    adapter,
     runtimeOptions,
     statePath,
     readState,

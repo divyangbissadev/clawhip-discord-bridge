@@ -3,11 +3,9 @@ import {
   detectTmuxExecutor,
   ensureTmuxSession,
   getExecutorSessionName,
-  isSnowflakeGreater,
   sendCommandToTmux,
   sendKeysToTmux,
 } from '../clawhip-discord-bridge-lib.mjs';
-import { extractMessageText } from './discord-adapter.mjs';
 import { getAllowedPrefixes, routeBridgeCommand } from './command-router.mjs';
 import {
   detectPermissionRequest,
@@ -244,7 +242,7 @@ function getRetryAfterMs(error) {
   return Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : null;
 }
 
-async function publishLivePermissionPrompt({ bridgeConfig, discord, state, statePath, writeState }) {
+async function publishLivePermissionPrompt({ bridgeConfig, adapter, state, statePath, writeState }) {
   const targetSession = getActiveDispatch(state)?.targetSession ?? resolveExecutorSession(bridgeConfig);
   const tail = captureTmuxTail(targetSession, 160);
   const permissionRequest = detectPermissionRequest(tail);
@@ -278,21 +276,26 @@ async function publishLivePermissionPrompt({ bridgeConfig, discord, state, state
   delete state.livePermissionActionSignature;
   delete state.livePermissionReactionSignature;
   delete state.livePermissionReactionRetryAt;
-  const posted = await discord.postMessage(formatPermissionRequest(targetSession, permissionRequest));
-  state.livePermissionPromptMessageId = posted.id;
+  const posted = await adapter.postMessage(formatPermissionRequest(targetSession, permissionRequest));
+  state.livePermissionPromptMessageId = posted?.id ?? state.livePermissionPromptMessageId ?? null;
   writeState(statePath, state);
   console.log(`[clawhip-bridge] published permission prompt for ${targetSession}: ${permissionRequest.command}`);
 
-  for (const emoji of Object.keys(PERMISSION_REACTION_MAP)) {
-    try {
-      await discord.addReaction(posted.id, emoji);
-    } catch (error) {
-      console.error('[clawhip-bridge] failed to add reaction:', emoji, error);
+  if (adapter.supportsReactions && posted?.id) {
+    for (const emoji of Object.keys(PERMISSION_REACTION_MAP)) {
+      try {
+        await adapter.addReaction(posted.id, emoji);
+      } catch (error) {
+        console.error('[clawhip-bridge] failed to add reaction:', emoji, error);
+      }
     }
   }
 }
 
-async function applyPermissionReaction({ bridgeConfig, discord, runtimeOptions, state, statePath, writeState }) {
+async function applyPermissionReaction({ bridgeConfig, adapter, runtimeOptions, state, statePath, writeState }) {
+  if (!adapter.supportsReactions) {
+    return false;
+  }
   const messageId = state.livePermissionPromptMessageId;
   if (!messageId) {
     return false;
@@ -305,7 +308,7 @@ async function applyPermissionReaction({ bridgeConfig, discord, runtimeOptions, 
     return false;
   }
 
-  const promptMessage = await discord.fetchMessage(messageId);
+  const promptMessage = await adapter.fetchMessage(messageId);
   const reactions = promptMessage.reactions ?? [];
   const countsSignature = getReactionCountsSignature(reactions);
   if (state.livePermissionReactionSignature === countsSignature) {
@@ -319,7 +322,7 @@ async function applyPermissionReaction({ bridgeConfig, discord, runtimeOptions, 
 
     let users;
     try {
-      users = await discord.fetchReactionUsers(messageId, emoji, 25);
+      users = await adapter.fetchReactionUsers(messageId, emoji, 25);
     } catch (error) {
       const retryAfterMs = getRetryAfterMs(error);
       if (retryAfterMs !== null) {
@@ -352,7 +355,7 @@ async function applyPermissionReaction({ bridgeConfig, discord, runtimeOptions, 
       authorName: allowed.global_name || allowed.username || allowed.id,
       bridgeConfig,
       runtimeOptions,
-      notify: (text) => discord.postMessage(text),
+      notify: (text) => adapter.postMessage(text),
     });
 
     return true;
@@ -490,72 +493,76 @@ export async function executeBridgeCommand({
 export async function processBridgeMessage({
   message,
   bridgeConfig,
-  discord,
+  adapter,
   runtimeOptions,
   selfId,
   state,
   statePath,
   writeState,
 }) {
-  if (state.lastSeenMessageId && !isSnowflakeGreater(message.id, state.lastSeenMessageId)) {
+  const previousCursor = state.lastSeenCursor ?? state.lastSeenMessageId ?? null;
+  if (previousCursor && !adapter.isMessageNewer(message, previousCursor)) {
     return;
   }
 
-  state.lastSeenMessageId = message.id;
+  state.lastSeenCursor = adapter.getMessageCursor(message);
+  delete state.lastSeenMessageId;
   writeState(statePath, state);
 
-  if (!runtimeOptions.allowBotMessages && message.author?.id === selfId) {
+  if (!runtimeOptions.allowBotMessages && selfId && adapter.getAuthorId(message) === selfId) {
     return;
   }
 
-  const content = extractMessageText(message);
+  const content = adapter.extractMessageText(message);
   if (!content) {
-    console.log(`[clawhip-bridge] skipped message ${message.id}: empty extracted content`);
+    console.log(`[clawhip-bridge] skipped message ${adapter.getMessageCursor(message)}: empty extracted content`);
     return;
   }
 
-  const authorName =
-    message.author?.global_name ||
-    message.author?.username ||
-    message.author?.id ||
-    'unknown';
+  const authorId = adapter.getAuthorId(message);
+  const authorName = adapter.getAuthorName(message);
 
   if (
     bridgeConfig.allowedUserIds.length > 0 &&
-    !bridgeConfig.allowedUserIds.includes(message.author?.id)
+    !bridgeConfig.allowedUserIds.includes(authorId)
   ) {
-    await discord.postMessage(
+    await adapter.postMessage(
       `⛔ command rejected from ${authorName}: user is not in the Discord bridge allowlist`
     );
     return;
   }
 
-  console.log(`[clawhip-bridge] dispatching message ${message.id} from ${authorName}: ${content.replace(/\s+/g, ' ').slice(0, 160)}`);
+  console.log(`[clawhip-bridge] dispatching message ${adapter.getMessageCursor(message)} from ${authorName}: ${content.replace(/\s+/g, ' ').slice(0, 160)}`);
 
   await executeBridgeCommand({
     content,
     authorName,
     bridgeConfig,
     runtimeOptions,
-    messageId: message.id,
+    messageId: adapter.getMessageCursor(message),
     state,
     statePath,
     writeState,
-    notify: (text) => discord.postMessage(text),
+    notify: (text) => adapter.postMessage(text),
   });
 }
 
 export async function runBridge({
   bridgeConfig,
-  discord,
+  adapter,
   runtimeOptions,
   statePath,
   readState,
   writeState,
 }) {
   const state = readState(statePath);
-  const bot = await discord.fetchBotIdentity();
-  const selfId = bot.id;
+  if (!adapter.supportsPolling) {
+    throw new Error(
+      `${bridgeConfig.provider} provider does not support pull-based message polling. Use discord, telegram, relay, or local --process-command mode.`
+    );
+  }
+  const bot = await adapter.fetchBotIdentity();
+  const selfId = bot?.id != null ? String(bot.id) : null;
 
   if (runtimeOptions.useClawhipNotifications && runtimeOptions.autoRegisterClawhipWatch) {
     for (const session of [bridgeConfig.tmuxSession, bridgeConfig.shellTmuxSession]) {
@@ -567,28 +574,36 @@ export async function runBridge({
   }
 
   console.log(
-    `[clawhip-bridge] watching Discord channel ${bridgeConfig.channelId} -> tmux session ${bridgeConfig.tmuxSession}`
+    `[clawhip-bridge] watching ${bridgeConfig.provider} transport -> tmux session ${bridgeConfig.tmuxSession}`
   );
 
-  if (!state.lastSeenMessageId) {
-    const initialMessages = await discord.fetchRecentMessages(20);
+  if (!state.lastSeenCursor && state.lastSeenMessageId) {
+    state.lastSeenCursor = state.lastSeenMessageId;
+    delete state.lastSeenMessageId;
+    writeState(statePath, state);
+  }
+
+  if (!state.lastSeenCursor) {
+    const initialMessages = await adapter.fetchRecentMessages({ limit: 20 });
     if (initialMessages.length > 0) {
-      state.lastSeenMessageId = initialMessages[0].id;
+      const sortedInitial = adapter.sortMessages(initialMessages);
+      state.lastSeenCursor = adapter.getMessageCursor(sortedInitial.at(-1));
       writeState(statePath, state);
     }
   }
 
   while (true) {
     try {
-      const messages = await discord.fetchRecentMessages(20);
-      const sorted = [...messages].sort((a, b) =>
-        isSnowflakeGreater(a.id, b.id) ? 1 : -1
-      );
+      const messages = await adapter.fetchRecentMessages({
+        limit: 20,
+        afterCursor: state.lastSeenCursor ?? null,
+      });
+      const sorted = adapter.sortMessages(messages);
       for (const message of sorted) {
         await processBridgeMessage({
           message,
           bridgeConfig,
-          discord,
+          adapter,
           runtimeOptions,
           selfId,
           state,
@@ -598,14 +613,14 @@ export async function runBridge({
       }
       await publishLivePermissionPrompt({
         bridgeConfig,
-        discord,
+        adapter,
         state,
         statePath,
         writeState,
       });
       await applyPermissionReaction({
         bridgeConfig,
-        discord,
+        adapter,
         runtimeOptions,
         state,
         statePath,

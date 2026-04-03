@@ -8,11 +8,25 @@ Standalone Discord ↔ tmux bridge for unattended development workflows.
 Run natural-language coding tasks from Discord, route them into dedicated tmux
 sessions, and get concise replies plus task lifecycle updates back in-channel.
 
+Although Discord is the original native transport, the bridge is now designed
+to be **messaging-platform extensible** and **agent centric**:
+
+- native: Discord, Telegram
+- extensible: generic relay for Slack, Teams, WhatsApp, and custom messengers
+- outbound-only starter hooks: Slack webhooks, Teams webhooks, generic webhooks
+
 ## Features
 
-- Plain-language task dispatch from Discord
+- Plain-language task dispatch from chat
 - Selective executor routing: `@claude`, `@omx`, `@codex`
 - Selective agent routing: `use architect agent to ...`
+- Multi-messaging transport support:
+  - `discord`
+  - `telegram`
+  - `relay`
+  - `slack-webhook`
+  - `teams-webhook`
+  - `webhook`
 - Dedicated per-executor tmux sessions
 - Shell/git command routing to a separate shell session
 - Task lifecycle context messages:
@@ -34,12 +48,16 @@ sessions, and get concise replies plus task lifecycle updates back in-channel.
 
 ## Quick start
 
+See the full guide:
+
+- [`INSTALLATION.md`](./INSTALLATION.md)
+
 1. Install prerequisites:
    - Node 20+
    - `tmux`
    - `clawhip`
    - one or more executor CLIs on PATH (`claude`, `omx`, `codex`, etc.)
-2. Configure your Discord bot and Clawhip daemon.
+2. Configure your messaging transport and Clawhip daemon.
 3. Add a `[discord_bridge]` section to your `~/.clawhip/config.toml`.
 4. Start the bridge:
 
@@ -76,6 +94,9 @@ bash scripts/clawhip-discord-bridge-stop.sh
 ## Example `~/.clawhip/config.toml` bridge section
 
 ```toml
+[bridge_transport]
+provider = "discord"
+
 [discord_bridge]
 dispatch_session = "claude-pilot-dispatch"
 shell_session = "claude-pilot-dispatch-shell"
@@ -83,6 +104,10 @@ default_executor = "codex"
 executor_commands = ["claude", "omx", "codex"]
 allowed_user_ids = ["YOUR_DISCORD_USER_ID"]
 allowed_command_prefixes = ["echo", "pwd", "ls", "git status"]
+
+[providers.discord]
+token = "YOUR_DISCORD_BOT_TOKEN"
+default_channel = "YOUR_DISCORD_CHANNEL_ID"
 ```
 
 Optional:
@@ -92,7 +117,16 @@ Optional:
 - `default_executor` controls where plain-language tasks go
 - `executor_commands` declares allowed executor prefixes in Discord
 
-## What Discord receives
+Transport choices:
+
+- `provider = "discord"` — native polling/posting
+- `provider = "telegram"` — native polling/posting
+- `provider = "relay"` — best option for Slack / Teams / WhatsApp / anything custom
+- `provider = "slack-webhook"` — outbound-only
+- `provider = "teams-webhook"` — outbound-only
+- `provider = "webhook"` — outbound-only generic
+
+## What the chat receives
 
 For each task, the bridge can send:
 
@@ -133,6 +167,7 @@ This prevents a blocked executor from trapping unrelated tasks.
 - Executors are isolated into separate tmux sessions derived from `dispatch_session`.
 - Shell/git commands use `shell_session`.
 - For unattended work, prefer `codex` or `omx`; use `@claude ...` when you specifically want Claude.
+- For Slack / Teams / WhatsApp or any custom messenger, prefer the `relay` provider.
 
 ## Safety notes
 

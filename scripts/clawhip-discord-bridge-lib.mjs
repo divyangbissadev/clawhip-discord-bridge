@@ -22,6 +22,36 @@ function readTomlStringArray(text, key) {
   return [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]);
 }
 
+function escapeTomlTableName(tableName) {
+  return tableName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function readTomlTable(text, tableName) {
+  const lines = text.split(/\r?\n/);
+  const header = `[${tableName}]`;
+  const collected = [];
+  let inTable = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!inTable) {
+      if (trimmed === header) {
+        inTable = true;
+        collected.push(line);
+      }
+      continue;
+    }
+
+    if (/^\s*\[.*\]\s*$/.test(line) || /^\s*\[\[.*\]\]\s*$/.test(line)) {
+      break;
+    }
+
+    collected.push(line);
+  }
+
+  return collected.length > 0 ? collected.join("\n") : null;
+}
+
 function readFirstTmuxSession(text) {
   const blockMatch = text.match(/\[\[monitors\.tmux\.sessions\]\][\s\S]*?(?=\n\[\[|\n\[|$)/);
   if (!blockMatch) return null;
@@ -36,46 +66,66 @@ function readFirstGitRepoPath(text) {
 
 export function loadBridgeConfig(configPath = DEFAULT_CONFIG_PATH) {
   const text = fs.readFileSync(configPath, "utf8");
-  const token = readTomlString(text, "token");
-  const channelId = readTomlString(text, "default_channel");
+  const bridgeBlock = readTomlTable(text, "discord_bridge") ?? "";
+  const transportBlock = readTomlTable(text, "bridge_transport") ?? bridgeBlock;
+  const discordProviderBlock = readTomlTable(text, "bridge_provider.discord") ?? readTomlTable(text, "providers.discord") ?? "";
+  const telegramProviderBlock = readTomlTable(text, "bridge_provider.telegram") ?? "";
+  const relayProviderBlock = readTomlTable(text, "bridge_provider.relay") ?? "";
+  const webhookProviderBlock = readTomlTable(text, "bridge_provider.webhook") ?? "";
+  const slackWebhookProviderBlock = readTomlTable(text, "bridge_provider.slack_webhook") ?? "";
+  const teamsWebhookProviderBlock = readTomlTable(text, "bridge_provider.teams_webhook") ?? "";
+  const provider =
+    (process.env.CLAWHIP_BRIDGE_PROVIDER ??
+      readTomlString(transportBlock, "provider") ??
+      "discord").toLowerCase();
+  const token =
+    readTomlString(discordProviderBlock, "token") ??
+    readTomlString(text, "token");
+  const channelId =
+    readTomlString(discordProviderBlock, "channel_id") ??
+    readTomlString(discordProviderBlock, "default_channel") ??
+    readTomlString(text, "default_channel");
   const monitorTmuxSession = readFirstTmuxSession(text) ?? "claude-pilot";
   const tmuxSession =
     process.env.CLAWHIP_BRIDGE_DISPATCH_SESSION ??
-    readTomlString(text, "dispatch_session") ??
+    readTomlString(bridgeBlock, "dispatch_session") ??
     monitorTmuxSession;
   const shellTmuxSession =
     process.env.CLAWHIP_BRIDGE_SHELL_SESSION ??
-    readTomlString(text, "shell_session") ??
+    readTomlString(bridgeBlock, "shell_session") ??
     `${tmuxSession}-shell`;
   const workingDirectory = readFirstGitRepoPath(text) ?? process.cwd();
-  const allowedUserIds = readTomlStringArray(text, "allowed_user_ids");
-  const allowedCommandPrefixes = readTomlStringArray(text, "allowed_command_prefixes");
+  const allowedUserIds = readTomlStringArray(bridgeBlock, "allowed_user_ids");
+  const allowedCommandPrefixes = readTomlStringArray(bridgeBlock, "allowed_command_prefixes");
   const executorCommands = [
     ...new Set(
       (
-        readTomlStringArray(text, "executor_commands").length > 0
-          ? readTomlStringArray(text, "executor_commands")
+        readTomlStringArray(bridgeBlock, "executor_commands").length > 0
+          ? readTomlStringArray(bridgeBlock, "executor_commands")
           : DEFAULT_EXECUTOR_COMMANDS
       ).map((entry) => entry.toLowerCase())
     ),
   ];
   const defaultExecutor = (
     process.env.CLAWHIP_BRIDGE_DEFAULT_EXECUTOR ??
-    readTomlString(text, "default_executor") ??
+    readTomlString(bridgeBlock, "default_executor") ??
     executorCommands[0] ??
     DEFAULT_EXECUTOR_COMMANDS[0]
   ).toLowerCase();
 
-  if (!token) {
-    throw new Error(`No Discord bot token found in ${configPath}`);
-  }
+  if (provider === "discord") {
+    if (!token) {
+      throw new Error(`No Discord bot token found in ${configPath}`);
+    }
 
-  if (!channelId) {
-    throw new Error(`No default Discord channel found in ${configPath}`);
+    if (!channelId) {
+      throw new Error(`No default Discord channel found in ${configPath}`);
+    }
   }
 
   return {
     configPath,
+    provider,
     token,
     channelId,
     monitorTmuxSession,
@@ -86,6 +136,59 @@ export function loadBridgeConfig(configPath = DEFAULT_CONFIG_PATH) {
     allowedCommandPrefixes,
     executorCommands,
     defaultExecutor,
+    providers: {
+      discord: {
+        token,
+        channelId,
+      },
+      telegram: {
+        botToken:
+          process.env.CLAWHIP_BRIDGE_TELEGRAM_BOT_TOKEN ??
+          readTomlString(telegramProviderBlock, "bot_token"),
+        chatId:
+          process.env.CLAWHIP_BRIDGE_TELEGRAM_CHAT_ID ??
+          readTomlString(telegramProviderBlock, "chat_id"),
+        apiBaseUrl:
+          process.env.CLAWHIP_BRIDGE_TELEGRAM_API_BASE_URL ??
+          readTomlString(telegramProviderBlock, "api_base_url") ??
+          "https://api.telegram.org",
+      },
+      relay: {
+        inboundUrl:
+          process.env.CLAWHIP_BRIDGE_RELAY_INBOUND_URL ??
+          readTomlString(relayProviderBlock, "inbound_url"),
+        outboundUrl:
+          process.env.CLAWHIP_BRIDGE_RELAY_OUTBOUND_URL ??
+          readTomlString(relayProviderBlock, "outbound_url"),
+        identityUrl:
+          process.env.CLAWHIP_BRIDGE_RELAY_IDENTITY_URL ??
+          readTomlString(relayProviderBlock, "identity_url"),
+        selfId:
+          process.env.CLAWHIP_BRIDGE_RELAY_SELF_ID ??
+          readTomlString(relayProviderBlock, "self_id"),
+        authHeaderName:
+          process.env.CLAWHIP_BRIDGE_RELAY_AUTH_HEADER_NAME ??
+          readTomlString(relayProviderBlock, "auth_header_name"),
+        authHeaderValue:
+          process.env.CLAWHIP_BRIDGE_RELAY_AUTH_HEADER_VALUE ??
+          readTomlString(relayProviderBlock, "auth_header_value"),
+      },
+      webhook: {
+        webhookUrl:
+          process.env.CLAWHIP_BRIDGE_WEBHOOK_URL ??
+          readTomlString(webhookProviderBlock, "webhook_url"),
+      },
+      slackWebhook: {
+        webhookUrl:
+          process.env.CLAWHIP_BRIDGE_SLACK_WEBHOOK_URL ??
+          readTomlString(slackWebhookProviderBlock, "webhook_url"),
+      },
+      teamsWebhook: {
+        webhookUrl:
+          process.env.CLAWHIP_BRIDGE_TEAMS_WEBHOOK_URL ??
+          readTomlString(teamsWebhookProviderBlock, "webhook_url"),
+      },
+    },
   };
 }
 
